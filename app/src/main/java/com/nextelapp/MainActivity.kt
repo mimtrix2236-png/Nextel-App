@@ -210,7 +210,7 @@ private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroun
                 }
                 Box(Modifier.size(250.dp).background(Color.Transparent, CircleShape)
                     .pointerInput(connection.isConnected()) {
-                        androidx.compose.foundation.gestures.detectTapGestures(onPress = {
+                        detectTapGestures(onPress = {
                             fingerDown = true
                             if (!connection.isConnected()) {
                                 status = "Primero conectá los dos teléfonos a la misma Wi-Fi y uní la sala."
