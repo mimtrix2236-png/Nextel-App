@@ -2,6 +2,8 @@ package com.nextelapp
 
 import android.Manifest
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.os.Bundle
@@ -134,6 +136,11 @@ private fun NextelHome() {
             }
             if (hostIp.isNotBlank()) {
                 Text("IP de este teléfono: $hostIp", color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                OutlinedButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("IP local de Nextel", hostIp))
+                    status = "IP copiada: $hostIp"
+                }) { Text("Copiar IP", color = Cyan) }
             }
             OutlinedTextField(
                 value = remoteIp, onValueChange = { remoteIp = it },
