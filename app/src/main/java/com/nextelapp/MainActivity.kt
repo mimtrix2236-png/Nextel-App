@@ -1,8 +1,13 @@
 package com.nextelapp
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -17,6 +22,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,6 +48,23 @@ class MainActivity : ComponentActivity() {
 private fun NextelHome() {
     var selected by remember { mutableStateOf("Inicio") }
     var transmitting by remember { mutableStateOf(false) }
+    var fingerDown by remember { mutableStateOf(false) }
+    var micMessage by remember { mutableStateOf("Micrófono listo") }
+    val context = LocalContext.current
+    val capture = remember { PttAudioCapture() }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && fingerDown) {
+            transmitting = capture.start()
+            micMessage = if (transmitting) "Micrófono activo · transmisión aún no conectada" else "No se pudo iniciar el micrófono"
+        } else if (!granted) {
+            micMessage = "Permiso de micrófono denegado"
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { capture.stop() }
+    }
 
     MaterialTheme(colorScheme = darkColorScheme(
         background = Navy, surface = Color(0xFF06142B), primary = Blue
@@ -86,12 +109,26 @@ private fun NextelHome() {
                         fontWeight = FontWeight.Black, fontSize = 16.sp, textAlign = TextAlign.Center)
                     Text(if (transmitting) "Soltá para terminar" else "PARA HABLAR", color = Cyan,
                         fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(micMessage, color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.Center)
                 }
                 // Interacción visual inicial. La transmisión de audio se implementará en la siguiente etapa.
                 Box(Modifier.size(280.dp).background(Color.Transparent, CircleShape)
                     .pointerInputPtt(
-                        onPress = { transmitting = true },
-                        onRelease = { transmitting = false }
+                        onPress = {
+                            fingerDown = true
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                transmitting = capture.start()
+                                micMessage = if (transmitting) "Micrófono activo · transmisión aún no conectada" else "No se pudo iniciar el micrófono"
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        onRelease = {
+                            fingerDown = false
+                            capture.stop()
+                            transmitting = false
+                            micMessage = "Micrófono listo"
+                        }
                     ))
             }
             Spacer(Modifier.weight(1f))
