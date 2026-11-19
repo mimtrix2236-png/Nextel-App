@@ -107,7 +107,7 @@ private fun NextelHome() {
 }
 
 @Composable
-private fun NavItem(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun RowScope.NavItem(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
                     selected: String, onSelect: (String) -> Unit) {
     val active = selected == label
     Column(
