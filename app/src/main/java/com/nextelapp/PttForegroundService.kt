@@ -84,7 +84,7 @@ class PttForegroundService : Service() {
 
     private fun buildNotification(message: String): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_call)
+            .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
             .setContentTitle("Nextel App · Walkie-talkie")
             .setContentText(message)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
