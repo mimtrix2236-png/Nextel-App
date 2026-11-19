@@ -2,6 +2,10 @@ package com.nextelapp
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.ComponentName
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.pm.PackageManager
@@ -10,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,9 +52,40 @@ private val Red = Color(0xFFE51B23)
 private val Green = Color(0xFF38E600)
 
 class MainActivity : ComponentActivity() {
+    private val pttServiceState = mutableStateOf<PttForegroundService?>(null)
+    private var bound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            pttServiceState.value = (binder as? PttForegroundService.LocalBinder)?.service()
+            bound = true
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            pttServiceState.value = null
+            bound = false
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { NextelHome() }
+        setContent { NextelHome(pttServiceState) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val intent = Intent(this, PttForegroundService::class.java).apply {
+            action = PttForegroundService.ACTION_START
+        }
+        androidx.core.content.ContextCompat.startForegroundService(this, intent)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+    }
+
+    override fun onStop() {
+        if (bound) {
+            unbindService(serviceConnection)
+            bound = false
+        }
+        super.onStop()
     }
 }
 
@@ -65,7 +101,7 @@ private fun localWifiIp(context: Context): String {
 }
 
 @Composable
-private fun NextelHome() {
+private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroundService?>) {
     var selected by remember { mutableStateOf("Inicio") }
     var transmitting by remember { mutableStateOf(false) }
     var fingerDown by remember { mutableStateOf(false) }
@@ -74,7 +110,8 @@ private fun NextelHome() {
     var remoteIp by remember { mutableStateOf("") }
     val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    val connection = remember {
+    val service = serviceState.value
+    val connection = service?.connection ?: remember {
         LanPttConnection { message -> mainHandler.post { status = message } }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -86,7 +123,7 @@ private fun NextelHome() {
         } else if (!granted) status = "Permiso de micrófono denegado"
     }
     DisposableEffect(Unit) {
-        onDispose { connection.close() }
+        onDispose { if (service == null) connection.close() }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(background = Navy, surface = Color(0xFF06142B), primary = Blue)) {
