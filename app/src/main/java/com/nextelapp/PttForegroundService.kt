@@ -44,7 +44,11 @@ class PttForegroundService : Service() {
             sendBroadcast(Intent("com.nextelapp.PTT_STATUS").setPackage(packageName)
                 .putExtra("status", message))
         }
-        startForeground(NOTIFICATION_ID, buildNotification("Listo para conectar"))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, buildNotification("Listo para conectar"), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("Listo para conectar"))
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
