@@ -25,40 +25,43 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
     @Volatile private var socket: Socket? = null
     @Volatile private var server: ServerSocket? = null
     @Volatile private var output: BufferedOutputStream? = null
-    private var input: BufferedInputStream? = null
-    private var receiveTrack: AudioTrack? = null
+    @Volatile private var input: BufferedInputStream? = null
+    @Volatile private var receiveTrack: AudioTrack? = null
     private val connected = AtomicBoolean(false)
     private val sending = AtomicBoolean(false)
     @Volatile private var recorder: AudioRecord? = null
     private var sendThread: Thread? = null
     private var receiveThread: Thread? = null
 
-    fun host() {
+    @Synchronized fun host() {
+        close()
         Thread {
             try {
-                closeSocketOnly()
-                server = ServerSocket(PORT)
-                onStatus("Esperando al otro teléfono · puerto $PORT")
-                val accepted = server!!.accept()
+                val listeningServer = ServerSocket(PORT)
+                server = listeningServer
+                onStatus("Sala creada correctamente · esperando al otro teléfono")
+                val accepted = listeningServer.accept()
                 attach(accepted)
             } catch (e: Exception) {
-                onStatus("Error al crear sala: ${e.message}")
+                if (server?.isClosed != true) {
+                    onStatus("No se pudo crear la sala: ${e.localizedMessage ?: "error de red"}")
+                }
             }
-        }.start()
+        }.also { it.name = "NextelLanHost"; it.start() }
     }
 
     fun connect(ip: String) {
         Thread {
             try {
-                closeSocketOnly()
+                close()
                 onStatus("Conectando a $ip…")
                 val s = Socket()
                 s.connect(java.net.InetSocketAddress(ip.trim(), PORT), 8000)
                 attach(s)
             } catch (e: Exception) {
-                onStatus("No se pudo conectar: ${e.message}")
+                onStatus("No se pudo conectar: ${e.localizedMessage ?: "revisá la IP y la Wi-Fi"}")
             }
-        }.start()
+        }.also { it.name = "NextelLanConnect"; it.start() }
     }
 
     @Synchronized private fun attach(s: Socket) {
@@ -66,7 +69,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
         input = BufferedInputStream(s.getInputStream())
         output = BufferedOutputStream(s.getOutputStream())
         connected.set(true)
-        onStatus("Conectado por Wi-Fi · listo para hablar")
+        onStatus("Segundo teléfono conectado · PTT listo")
         val min = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         receiveTrack = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
@@ -120,15 +123,15 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
         } catch (e: SecurityException) {
             sending.set(false); onStatus("Falta permiso de micrófono"); false
         } catch (e: Exception) {
-            sending.set(false); onStatus("Error de micrófono: ${e.message}"); false
+            sending.set(false); onStatus("Error de micrófono: ${e.localizedMessage}"); false
         }
     }
 
     fun stopTalking() {
         sending.set(false)
+        try { recorder?.stop() } catch (_: Exception) { }
         try { sendThread?.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
         sendThread = null
-        try { recorder?.stop() } catch (_: Exception) { }
         recorder?.release()
         recorder = null
     }
