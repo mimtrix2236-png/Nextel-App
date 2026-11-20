@@ -6,7 +6,7 @@ Aplicación Android Push-to-Talk (PTT), inspirada en el uso de radios: mantener 
 
 - Android nativo con Kotlin y Jetpack Compose.
 - Interfaz oscura con acentos azul eléctrico y rojo.
-- Crear sala en un teléfono y conectar el segundo mediante la IP local.
+- Crear una sala anfitriona y conectar hasta 15 teléfonos adicionales mediante IP local (16 participantes en total, contando al anfitrión).
 - Transporte de voz PCM mono a 16 kHz mediante TCP en la red Wi-Fi local.
 - Botón PTT de mantener presionado.
 - Servicio en primer plano para mantener el ciclo de vida de la conexión.
@@ -16,7 +16,7 @@ Aplicación Android Push-to-Talk (PTT), inspirada en el uso de radios: mantener 
 
 La conexión LAN y el flujo básico de captura/envío y reproducción de audio están implementados en el código. La compilación automática está en proceso de corrección y todavía falta verificar el APK y probar el audio entre dos teléfonos reales.
 
-Esta primera versión está limitada a una conexión directa entre dos dispositivos en la misma red local. No utiliza Firebase ni un servidor externo. Los grupos y canales múltiples quedan para una etapa posterior.
+La versión LAN permite hasta 16 participantes en total dentro de la misma red local y no necesita Internet. La comunicación entre redes distintas o desde otras provincias todavía no está implementada: requiere un servicio de señalización y retransmisión de audio accesible por Internet (por ejemplo, WebRTC con STUN/TURN) y su infraestructura de despliegue. No se debe presentar el modo Internet como disponible hasta desplegar y probar ese servicio. Los grupos y canales múltiples siguen pendientes.
 
 ## Identidad visual
 
