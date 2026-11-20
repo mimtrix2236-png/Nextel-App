@@ -23,10 +23,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
@@ -43,6 +41,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -115,6 +114,17 @@ private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroun
     val connection = service?.connection ?: remember {
         LanPttConnection { message -> mainHandler.post { status = message } }
     }
+
+    DisposableEffect(service) {
+        if (service != null) {
+            status = service.currentStatus
+            service.statusListener = { message -> mainHandler.post { status = message } }
+        }
+        onDispose {
+            if (service != null) service.statusListener = null
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -123,117 +133,164 @@ private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroun
             if (!transmitting) status = "No se pudo iniciar el audio. Verificá la conexión."
         } else if (!granted) status = "Permiso de micrófono denegado"
     }
-    DisposableEffect(Unit) {
+
+    DisposableEffect(connection, service) {
         onDispose { if (service == null) connection.close() }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(background = Navy, surface = Color(0xFF06142B), primary = Blue)) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier.fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0xFF001B52), Navy, Color.Black)))
-                .verticalScroll(rememberScrollState()).padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Nextel App", fontSize = 30.sp, fontWeight = FontWeight.Black, color = Color.White)
-                    Text("PUSH-TO-TALK · LAN", color = Red, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                    Text("Transmisión local por Wi-Fi", color = Color.LightGray, fontSize = 12.sp)
-                }
-                IconButton(onClick = { selected = "Configuración" }) {
-                    Icon(Icons.Default.Settings, contentDescription = "Configuración", tint = Color.White)
-                }
-            }
+            val tiny = maxHeight < 620.dp
+            val compact = maxHeight < 700.dp
+            val outerPadding = if (tiny) 9.dp else 12.dp
+            val micSize = if (tiny) 142.dp else if (compact) 174.dp else 204.dp
+            val titleSize = if (tiny) 25.sp else 29.sp
 
-            Spacer(Modifier.height(16.dp))
-            Row(
-                Modifier.fillMaxWidth().border(1.dp, Blue, RoundedCornerShape(20.dp))
-                    .background(Color(0xCC020B1D), RoundedCornerShape(20.dp)).padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = outerPadding, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(if (connection.isConnected()) "●" else "○", color = if (connection.isConnected()) Green else Color.LightGray)
-                Spacer(Modifier.width(8.dp))
-                Text(status, color = Color.White, fontSize = 12.sp)
-            }
-
-            Spacer(Modifier.height(14.dp))
-            Text("CONEXIÓN ENTRE DOS TELÉFONOS", color = Cyan, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Text("Los dos teléfonos deben estar conectados a la misma Wi-Fi.", color = Color.LightGray, fontSize = 12.sp,
-                textAlign = TextAlign.Center)
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    hostIp = localWifiIp(context)
-                    if (hostIp.isBlank()) status = "Conectá este teléfono a una red Wi-Fi primero."
-                    else { status = "Abriendo sala en $hostIp"; connection.host() }
-                }, modifier = Modifier.weight(1f)) { Text("Crear sala") }
-                Button(onClick = { connection.close(); status = "Desconectado"; transmitting = false },
-                    modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Red)) {
-                    Text("Desconectar")
+                Row(Modifier.fillMaxWidth().height(if (tiny) 57.dp else 65.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Nextel App", fontSize = titleSize, fontWeight = FontWeight.Black, color = Color.White,
+                            maxLines = 1)
+                        Text("PUSH-TO-TALK · LAN", color = Red, fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp, fontSize = if (tiny) 12.sp else 14.sp)
+                        if (!tiny) Text("Transmisión local por Wi-Fi", color = Color.LightGray, fontSize = 11.sp)
+                    }
+                    IconButton(onClick = { selected = "Configuración" }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configuración", tint = Color.White)
+                    }
                 }
-            }
-            if (hostIp.isNotBlank()) {
-                Text("IP de este teléfono: $hostIp", color = Green, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedButton(onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("IP local de Nextel", hostIp))
-                    status = "IP copiada: $hostIp"
-                }) { Text("Copiar IP", color = Cyan) }
-            }
-            OutlinedTextField(
-                value = remoteIp, onValueChange = { remoteIp = it },
-                label = { Text("IP del teléfono que creó la sala") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedLabelColor = Cyan, unfocusedLabelColor = Color.LightGray
+
+                Spacer(Modifier.height(5.dp))
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 38.dp)
+                        .border(1.dp, Blue, RoundedCornerShape(18.dp))
+                        .background(Color(0xCC020B1D), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(if (connection.isConnected()) "●" else "○",
+                        color = if (connection.isConnected()) Green else Color.LightGray, fontSize = 12.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(status, color = Color.White, fontSize = if (tiny) 10.sp else 11.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text("CONEXIÓN ENTRE DOS TELÉFONOS", color = Cyan,
+                    fontWeight = FontWeight.Bold, fontSize = if (tiny) 11.sp else 12.sp)
+                if (!tiny) Text("Los dos teléfonos deben estar conectados a la misma Wi-Fi.",
+                    color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.Center)
+
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth().height(if (tiny) 39.dp else 43.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        hostIp = localWifiIp(context)
+                        if (hostIp.isBlank()) status = "Conectá este teléfono a una red Wi-Fi primero."
+                        else connection.host()
+                    }, modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                        Text("Crear sala", fontSize = 12.sp)
+                    }
+                    Button(onClick = {
+                        connection.close()
+                        hostIp = ""
+                        status = "Desconectado"
+                        transmitting = false
+                    }, modifier = Modifier.weight(1f).fillMaxHeight(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Red),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                        Text("Desconectar", fontSize = 12.sp)
+                    }
+                }
+
+                if (hostIp.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth().height(31.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center) {
+                        Text("IP: $hostIp", color = Green, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("IP local de Nextel", hostIp))
+                            status = "IP copiada: $hostIp"
+                        }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                            Text("Copiar", color = Cyan, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = remoteIp, onValueChange = { remoteIp = it },
+                    label = { Text("IP del teléfono que creó la sala", fontSize = 11.sp) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth().height(if (tiny) 53.dp else 57.dp),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedLabelColor = Cyan, unfocusedLabelColor = Color.LightGray
+                    )
                 )
-            )
-            Button(onClick = {
-                if (remoteIp.isBlank()) status = "Ingresá la IP del teléfono anfitrión."
-                else { hostIp = ""; connection.connect(remoteIp); status = "Intentando conectar con $remoteIp…" }
-            }, modifier = Modifier.fillMaxWidth()) { Text("Conectar a una sala") }
-
-            Spacer(Modifier.height(18.dp))
-            Box(contentAlignment = Alignment.Center) {
-                Box(Modifier.size(250.dp).border(5.dp, Brush.linearGradient(listOf(Cyan, Blue)), CircleShape)
-                    .padding(12.dp).border(3.dp, Color.LightGray, CircleShape)
-                    .background(Brush.radialGradient(listOf(Color(0xFF0759D8), Color(0xFF020B24))), CircleShape))
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🎙", fontSize = 68.sp)
-                    Text(if (transmitting) "TRANSMITIENDO" else "MANTENÉ PRESIONADO",
-                        color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp, textAlign = TextAlign.Center)
-                    Text(if (transmitting) "Soltá para terminar" else "PARA HABLAR",
-                        color = Cyan, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text(if (connection.isConnected()) "Audio LAN conectado" else "Esperando conexión LAN",
-                        color = Color.LightGray, fontSize = 10.sp)
+                Spacer(Modifier.height(4.dp))
+                Button(onClick = {
+                    if (remoteIp.isBlank()) status = "Ingresá la IP del teléfono anfitrión."
+                    else { hostIp = ""; connection.connect(remoteIp); status = "Intentando conectar con $remoteIp…" }
+                }, modifier = Modifier.fillMaxWidth().height(if (tiny) 39.dp else 42.dp),
+                    contentPadding = PaddingValues(vertical = 0.dp)) {
+                    Text("Conectar a una sala", fontSize = 12.sp)
                 }
-                Box(Modifier.size(250.dp).background(Color.Transparent, CircleShape)
-                    .pointerInput(connection.isConnected()) {
-                        detectTapGestures(onPress = {
-                            fingerDown = true
-                            if (!connection.isConnected()) {
-                                status = "Primero conectá los dos teléfonos a la misma Wi-Fi y uní la sala."
-                            } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                transmitting = connection.startTalking()
-                                if (!transmitting) status = "No se pudo iniciar el micrófono."
-                            } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            tryAwaitRelease()
-                            fingerDown = false
-                            connection.stopTalking()
-                            transmitting = false
+
+                Spacer(Modifier.height(if (tiny) 5.dp else 8.dp))
+                Box(Modifier.size(micSize), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxSize().border(4.dp,
+                        Brush.linearGradient(listOf(Cyan, Blue)), CircleShape).padding(9.dp)
+                        .border(3.dp, Color.LightGray, CircleShape)
+                        .background(Brush.radialGradient(listOf(Color(0xFF0759D8), Color(0xFF020B24))), CircleShape))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎙", fontSize = if (tiny) 43.sp else 54.sp)
+                        Text(if (transmitting) "TRANSMITIENDO" else "MANTENÉ PRESIONADO",
+                            color = Color.White, fontWeight = FontWeight.Black,
+                            fontSize = if (tiny) 10.sp else 12.sp, textAlign = TextAlign.Center)
+                        Text(if (transmitting) "Soltá para terminar" else "PARA HABLAR",
+                            color = Cyan, fontWeight = FontWeight.Bold, fontSize = if (tiny) 11.sp else 12.sp)
+                        Text(if (connection.isConnected()) "Audio LAN conectado" else "Esperando conexión LAN",
+                            color = Color.LightGray, fontSize = 9.sp)
+                    }
+                    Box(Modifier.fillMaxSize().background(Color.Transparent, CircleShape)
+                        .pointerInput(connection.isConnected()) {
+                            detectTapGestures(onPress = {
+                                fingerDown = true
+                                if (!connection.isConnected()) {
+                                    status = "Primero creá o conectá una sala en la misma Wi-Fi."
+                                } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                    transmitting = connection.startTalking()
+                                    if (!transmitting) status = "No se pudo iniciar el micrófono."
+                                } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                tryAwaitRelease()
+                                fingerDown = false
+                                connection.stopTalking()
+                                transmitting = false
+                            })
                         })
-                    })
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("Prueba: en el teléfono 1 tocá Crear sala. En el teléfono 2 escribí la IP mostrada y tocá Conectar. Después mantené presionado el botón para hablar.",
-                color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(18.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NavItem("Inicio", Icons.Default.Home, selected) { selected = it }
-                NavItem("Grupos", Icons.Default.Groups, selected) { selected = it }
-                NavItem("Canales", Icons.Default.Tune, selected) { selected = it }
-                NavItem("Perfil", Icons.Default.Person, selected) { selected = it }
+                }
+
+                Spacer(Modifier.weight(1f, fill = true))
+                if (!tiny) {
+                    Text("Mantené presionado para hablar · soltá para escuchar.",
+                        color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1)
+                    Spacer(Modifier.height(5.dp))
+                }
+                Row(Modifier.fillMaxWidth().height(if (tiny) 49.dp else 54.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    NavItem("Inicio", Icons.Default.Home, selected) { selected = it }
+                    NavItem("Grupos", Icons.Default.Groups, selected) { selected = it }
+                    NavItem("Canales", Icons.Default.Tune, selected) { selected = it }
+                    NavItem("Perfil", Icons.Default.Person, selected) { selected = it }
+                }
             }
         }
     }
@@ -244,12 +301,15 @@ private fun RowScope.NavItem(label: String, icon: androidx.compose.ui.graphics.v
                     selected: String, onSelect: (String) -> Unit) {
     val active = selected == label
     Column(
-        Modifier.weight(1f).border(1.dp, if (active) Cyan else Blue, RoundedCornerShape(16.dp))
-            .background(if (active) Color(0xFF063B9C) else Color(0xCC020B1D), RoundedCornerShape(16.dp))
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        Modifier.weight(1f).fillMaxHeight().border(1.dp, if (active) Cyan else Blue, RoundedCornerShape(14.dp))
+            .background(if (active) Color(0xFF063B9C) else Color(0xCC020B1D), RoundedCornerShape(14.dp))
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        IconButton(onClick = { onSelect(label) }) { Icon(icon, contentDescription = label, tint = Color.White) }
-        Text(label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        IconButton(onClick = { onSelect(label) }, modifier = Modifier.size(30.dp)) {
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+        Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
