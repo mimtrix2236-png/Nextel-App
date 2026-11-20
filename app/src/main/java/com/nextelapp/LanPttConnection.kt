@@ -28,6 +28,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
     @Volatile private var input: BufferedInputStream? = null
     @Volatile private var receiveTrack: AudioTrack? = null
     private val connected = AtomicBoolean(false)
+    @Volatile private var hosting = false
     private val sending = AtomicBoolean(false)
     @Volatile private var recorder: AudioRecord? = null
     private var sendThread: Thread? = null
@@ -35,6 +36,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
 
     @Synchronized fun host() {
         close()
+        hosting = true
         Thread {
             try {
                 val listeningServer = ServerSocket(PORT)
@@ -43,6 +45,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
                 val accepted = listeningServer.accept()
                 attach(accepted)
             } catch (e: Exception) {
+                hosting = false
                 if (server?.isClosed != true) {
                     onStatus("No se pudo crear la sala: ${e.localizedMessage ?: "error de red"}")
                 }
@@ -51,6 +54,10 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
     }
 
     fun connect(ip: String) {
+        if (hosting) {
+            onStatus("Esta sala está creada en este teléfono. El otro teléfono debe conectarse usando esta IP.")
+            return
+        }
         Thread {
             try {
                 close()
@@ -138,6 +145,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
 
     private fun closeSocketOnly() {
         connected.set(false)
+        hosting = false
         try { socket?.close() } catch (_: Exception) { }
         try { server?.close() } catch (_: Exception) { }
         socket = null; server = null; input = null; output = null
