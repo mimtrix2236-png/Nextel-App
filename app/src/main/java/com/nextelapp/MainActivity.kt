@@ -237,8 +237,17 @@ private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroun
                 )
                 Spacer(Modifier.height(4.dp))
                 Button(onClick = {
-                    if (remoteIp.isBlank()) status = "Ingresá la IP del teléfono anfitrión."
-                    else { hostIp = ""; connection.connect(remoteIp); status = "Intentando conectar con $remoteIp…" }
+                    val enteredIp = remoteIp.trim()
+                    val thisPhoneIp = localWifiIp(context)
+                    if (enteredIp.isBlank()) {
+                        status = "Ingresá la IP del teléfono anfitrión."
+                    } else if (thisPhoneIp.isNotBlank() && enteredIp == thisPhoneIp) {
+                        status = "Esa es la IP de este teléfono. El otro teléfono debe ingresar esta IP para unirse."
+                    } else {
+                        hostIp = ""
+                        connection.connect(enteredIp)
+                        status = "Intentando conectar con $enteredIp…"
+                    }
                 }, modifier = Modifier.fillMaxWidth().height(if (tiny) 39.dp else 42.dp),
                     contentPadding = PaddingValues(vertical = 0.dp)) {
                     Text("Conectar a una sala", fontSize = 12.sp)
