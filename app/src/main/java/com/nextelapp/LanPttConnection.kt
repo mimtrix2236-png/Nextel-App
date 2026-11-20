@@ -28,7 +28,7 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
         private const val TYPE_AUDIO = 1
         private const val TYPE_TEXT = 2
         private const val MAX_PACKET = 64 * 1024
-        private const val MAX_CLIENTS = 16
+        private const val MAX_PARTICIPANTS = 16
     }
 
     private class Peer(val socket: Socket) {
@@ -62,9 +62,9 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
                 onStatus("Sala creada · IP local · esperando participantes")
                 while (!listeningServer.isClosed) {
                     val accepted = listeningServer.accept()
-                    if (peers.size >= MAX_CLIENTS) {
+                    if (peers.size >= MAX_PARTICIPANTS - 1) {
                         try { accepted.close() } catch (_: Exception) { }
-                        onStatus("Sala completa · máximo $MAX_CLIENTS participantes")
+                        onStatus("Sala completa · máximo $MAX_PARTICIPANTS participantes, incluido el anfitrión")
                         continue
                     }
                     try {
@@ -286,10 +286,10 @@ class LanPttConnection(private val onStatus: (String) -> Unit) {
     }
 
     private fun updateHostStatus() {
-        onStatus("Sala activa · ${peers.size} participante(s) conectado(s)")
+        onStatus("Sala activa · ${peers.size + 1}/$MAX_PARTICIPANTS participantes (incluido anfitrión)")
     }
 
-    fun participantCount(): Int = if (hosting) peers.size else if (connected.get()) 1 else 0
+    fun participantCount(): Int = if (hosting) peers.size + 1 else if (connected.get()) 1 else 0
 
     fun isConnected(): Boolean = if (hosting) peers.isNotEmpty() else connected.get()
 
