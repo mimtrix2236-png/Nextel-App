@@ -182,9 +182,9 @@ private fun NextelHome(serviceState: androidx.compose.runtime.State<PttForegroun
                 }
 
                 Spacer(Modifier.height(6.dp))
-                Text("CONEXIÓN ENTRE DOS TELÉFONOS", color = Cyan,
+                Text("SALA MULTIJUGADOR · RED LAN", color = Cyan,
                     fontWeight = FontWeight.Bold, fontSize = if (tiny) 11.sp else 12.sp)
-                if (!tiny) Text("Los dos teléfonos deben estar conectados a la misma Wi-Fi.",
+                if (!tiny) Text("Varios teléfonos pueden unirse a la sala sin Internet.",
                     color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.Center)
 
                 Spacer(Modifier.height(6.dp))
