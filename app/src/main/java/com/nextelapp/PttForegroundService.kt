@@ -30,7 +30,9 @@ class PttForegroundService : Service() {
     }
 
     private val binder = LocalBinder()
-    @Volatile private var latestStatus = "Servicio PTT activo"
+    @Volatile var currentStatus = "Servicio PTT activo"
+        private set
+    @Volatile var statusListener: ((String) -> Unit)? = null
     lateinit var connection: LanPttConnection
         private set
 
@@ -38,7 +40,8 @@ class PttForegroundService : Service() {
         super.onCreate()
         createNotificationChannel()
         connection = LanPttConnection { message ->
-            latestStatus = message
+            currentStatus = message
+            statusListener?.invoke(message)
             val manager = getSystemService(NotificationManager::class.java)
             manager.notify(NOTIFICATION_ID, buildNotification(message))
             sendBroadcast(Intent("com.nextelapp.PTT_STATUS").setPackage(packageName)
